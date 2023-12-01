@@ -2,6 +2,7 @@ const express = require('express')
 const app = express()
 const cors =require("cors")
 require('dotenv').config();
+const stripe = require("stripe")(process.env.Payment_secret);
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT||5000;
 
@@ -34,7 +35,11 @@ const partnersCollection= client.db("collegeDB").collection("partners");
 const teacherrequestCollection= client.db("collegeDB").collection("teacherrequest");
 const usersCollection= client.db("collegeDB").collection("users");
 const classCollection= client.db("collegeDB").collection("classes");
+const assignmentCollection= client.db("collegeDB").collection("assignment");
+const enrolledCollection= client.db("collegeDB").collection("enrolled");
 
+// paidids
+// loadin enrolled classes
 
 
 app.get("/partners",async(req,res)=>{
@@ -43,6 +48,12 @@ app.get("/partners",async(req,res)=>{
 })
 app.get("/classes",async(req,res)=>{
  const result = await classCollection.find().toArray();
+ res.send(result)
+})
+app.get("/classes/:id",async(req,res)=>{
+  const id =req?.params?.id;
+  const query ={_id: new ObjectId(id)}
+ const result = await classCollection.findOne(query);
  res.send(result)
 })
 
@@ -67,6 +78,52 @@ app.patch("/approveclass",async(req,res)=>{
     res.send(resulta)
   }
 })
+
+app.patch("/classenroll/:id",async(req,res)=>{
+  const id=req?.params?.id;
+
+  const {enrolledstudents} =req.body;
+  console.log(enrolledstudents)
+  const filter ={_id: new ObjectId(id)};
+
+  const updateDoc = {
+    $set: {
+      total_enrolment: enrolledstudents + 1
+    },
+  };
+  const result = await classCollection.updateOne(filter,updateDoc);
+  res.send(result)
+  
+})
+
+
+app.put("/updateClass/:id",async (req,res)=>{
+
+  const id =req.params.id;
+  const updateinfo =req.body;
+  console.log(updateinfo)
+  const query ={_id: new ObjectId(id)}
+  const updateDoc = {
+    $set: {
+      status:updateinfo.status,
+      Title:updateinfo.Title,
+      Name:updateinfo.Name,
+      Image:updateinfo.Image,
+      Short_description:updateinfo.Short_description,
+      total_enrolment:0,
+      email:updateinfo.email,
+      price:updateinfo.price
+    },
+  };
+
+  const result =await classCollection.updateOne(query,updateDoc)
+  res.send(result)
+  
+
+})
+
+
+
 
 app.get("/myclassesteacher/:email",async(req,res)=>{
   const query ={email :req?.params?.email}
@@ -115,14 +172,7 @@ app.patch("/teacherreq",async (req,res)=>{
     const result =await usersCollection.updateOne(filtera,updateDoca,options);
   }
   
-  
-
- 
-
  }
-
-
-
 
 })
 
@@ -160,6 +210,75 @@ app.patch(`/makeuseradmin/:email`,async (req,res)=>{
   const result =await usersCollection.updateOne(filtera,updateDoca);
 
 })
+
+// assignment related api 
+
+
+app.post("/assignment",async(req,res)=>{
+  const assignmentInfo =req.body;
+  const result =await assignmentCollection.insertOne(assignmentInfo);
+  res.send(result)
+
+})
+
+app.get("/assignments/:email",async(req,res)=>{
+  const query={email:req?.params?.email}
+
+  const result = await assignmentCollection.find(query).toArray();
+  res.send(result)
+})
+
+
+// enrolled 
+
+app.post("/payment",async(req,res)=>{
+  const payinfo =req.body;
+  const result =await enrolledCollection.insertOne(payinfo);
+  res.send(result);
+})
+
+
+app.get("/myenrolled/:email",async (req,res)=>{
+ const email =req?.params?.email;
+if(email){
+  const query ={studentemail:email
+  }
+  const  result =await enrolledCollection.find(query).toArray();
+  res.send(result)
+}
+
+})
+
+
+
+
+// PAYMENT REALATED API
+
+app.post("/create-payment-intent", async (req, res) => {
+
+  const{price} =req.body;
+  
+  if(price){
+    const amount =parseInt(price * 100)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount:amount ,
+      currency: "usd",
+      payment_method_types:["card"]
+    });
+  
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  }
+
+  
+
+  
+});
+
+
+
+
 
 
     // Send a ping to confirm a successful connection
