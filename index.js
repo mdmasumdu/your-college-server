@@ -11,7 +11,7 @@ const port = process.env.PORT||5000;
 
 // middle ware
 app.use(cors({
-  origin:["http://localhost:5173",],
+  origin:["http://localhost:5173","https://your-college-27b9c.web.app"],
   credentials:true
 }))
 app.use(express.json())
@@ -63,6 +63,7 @@ const classCollection= client.db("collegeDB").collection("classes");
 const assignmentCollection= client.db("collegeDB").collection("assignment");
 const enrolledCollection= client.db("collegeDB").collection("enrolled");
 const reviewsCollection= client.db("collegeDB").collection("reviews");
+const submitCollection= client.db("collegeDB").collection("submit");
 
 
 
@@ -124,6 +125,12 @@ app.get("/classes/:id",async(req,res)=>{
   const id =req?.params?.id;
   const query ={_id: new ObjectId(id)}
  const result = await classCollection.findOne(query);
+ res.send(result)
+})
+app.delete("/deleteclass/:id",async(req,res)=>{
+  const id =req?.params?.id;
+  const query ={_id: new ObjectId(id)}
+ const result = await classCollection.deleteOne(query);
  res.send(result)
 })
 
@@ -320,7 +327,23 @@ app.get("/assignments",async(req,res)=>{
   const result = await assignmentCollection.find().toArray();
   res.send(result)
 })
+app.get("/submitted/:id",async(req,res)=>{
+  // const query={email:req?.params?.email}
+const query ={assignmentid:req?.params?.id}
+  const result = await submitCollection.find(query).toArray();
+  res.send(result)
+})
 
+app.post('/assignmentsubmit',async (req,res)=>{
+
+ const  subinfo ={
+  assignmentid:req.body.ida[0],
+  date: new Date()
+ }
+  const resulta =await submitCollection.insertOne(subinfo);
+  res.send(resulta);
+  
+})
 
 // enrolled 
 
@@ -349,7 +372,7 @@ if(email){
 app.post("/reviews",async (req,res)=>{
   const reviewinfo =req.body;
 
-  const result = await reviewsCollection.insertOne(reviewinfo);
+  const result = ssubmit.insertOne(reviewinfo);
   res.send(result)
 })
 
