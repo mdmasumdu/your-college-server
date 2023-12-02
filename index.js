@@ -3,13 +3,38 @@ const app = express()
 const cors =require("cors")
 require('dotenv').config();
 const stripe = require("stripe")(process.env.Payment_secret);
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT||5000;
 
 
 // middle ware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin:["http://localhost:5173",],
+  credentials:true
+}))
+app.use(express.json())
+app.use(cookieParser())
+
+
+const verifytoken =(req,res,next)=>{
+  const token =req.cookies.token;
+  if(!token){
+   return res.status(401).send({message: "unauthorized"})
+  }
+  jwt.verify(token,process.env.JWT_SECRET,(err,decoded)=>{
+    if(err){
+      return res.status(401).send({message: "unauthorized orcuured"})
+    }
+
+    req.user =decoded;
+    next()
+  })
+
+
+}
+
 
 
 
@@ -37,10 +62,55 @@ const usersCollection= client.db("collegeDB").collection("users");
 const classCollection= client.db("collegeDB").collection("classes");
 const assignmentCollection= client.db("collegeDB").collection("assignment");
 const enrolledCollection= client.db("collegeDB").collection("enrolled");
+const reviewsCollection= client.db("collegeDB").collection("reviews");
 
-// paidids
-// loadin enrolled classes
 
+
+// /jwt
+app.post("/jwt",async (req,res)=>{
+  const user =req?.body;
+  console.log(user)
+const token =jwt.sign(user,process.env.JWT_SECRET,{expiresIn:"1h"})
+res.cookie("token",token,{
+httpOnly:true,
+secure:true,
+sameSite:"none"
+})
+.send({success:true})
+
+})
+
+
+app.post("/logout",(req,res)=>{
+  const user =req.body;
+  console.log("loggingout" ,user)
+  res.clearCookie("token",{maxAge:0}).send({message:"succes"})
+})
+
+
+
+const verifyadmin= async (req,res,next)=>{
+  const query ={email:req.user.email}
+  const result = await usersCollection.findOne(query);
+  const isAdmin =result.role == "admin"
+  
+  if(!isAdmin){
+    return res.status(403).send({message: "unauthorized orcuured"});
+   
+  }
+  next()
+}
+
+const verifyteacher= async (req,res,next)=>{
+  const query ={email:req.user.email}
+  const result = await usersCollection.findOne(query);
+  const isTeacher =result.role === "teacher"
+  if(!isTeacher){
+    return res.status(403).send({message: "unauthorized orcuured"});
+    
+  }
+  next()
+}
 
 app.get("/partners",async(req,res)=>{
  const result = await partnersCollection.find().toArray();
@@ -58,7 +128,7 @@ app.get("/classes/:id",async(req,res)=>{
 })
 
 
-app.post("/addClass",async (req,res)=>{
+app.post("/addClass",verifytoken,verifyteacher,async (req,res)=>{
   const classinfo =req.body;
   const result =await classCollection.insertOne(classinfo);
   res.send(result);
@@ -140,7 +210,7 @@ app.post("/teacherRequest",async (req,res)=>{
   res.send(result)
 })
 
-app.get("/teacherreq",async (req,res)=>{
+app.get("/teacherreq",verifytoken,verifyadmin,async (req,res)=>{
   const result= await teacherrequestCollection.find().toArray();
   res.send(result)
 })
@@ -190,6 +260,15 @@ app.get('/users',async (req,res)=>{
 
 })
 
+app.get('/users/:email',async (req,res)=>{
+
+
+  const query ={email:req.params.email}
+  const result = await usersCollection.findOne(query);
+  res.send(result)
+
+})
+
 app.post("/saveUser",async (req,res)=>{
   const userinfo =req.body;
   console.log("teacher info",userinfo)
@@ -210,6 +289,20 @@ app.patch(`/makeuseradmin/:email`,async (req,res)=>{
   const result =await usersCollection.updateOne(filtera,updateDoca);
 
 })
+app.patch(`/makestudent/:email`,async (req,res)=>{
+  console.log(req.params.email)
+  const filtera ={email : req?.params.email}
+  const updateDoca = {
+    $set: {
+      role: "student"
+    },
+  };
+ 
+
+  const result =await usersCollection.updateOne(filtera,updateDoca);
+  res.send(result)
+
+})
 
 // assignment related api 
 
@@ -221,10 +314,10 @@ app.post("/assignment",async(req,res)=>{
 
 })
 
-app.get("/assignments/:email",async(req,res)=>{
-  const query={email:req?.params?.email}
+app.get("/assignments",async(req,res)=>{
+  // const query={email:req?.params?.email}
 
-  const result = await assignmentCollection.find(query).toArray();
+  const result = await assignmentCollection.find().toArray();
   res.send(result)
 })
 
@@ -251,6 +344,20 @@ if(email){
 
 
 
+
+// rewview
+app.post("/reviews",async (req,res)=>{
+  const reviewinfo =req.body;
+
+  const result = await reviewsCollection.insertOne(reviewinfo);
+  res.send(result)
+})
+
+
+app.get("/reviews",async(req,res)=>{
+  const result = await reviewsCollection.find().toArray();
+  res.send(result)
+ })
 
 // PAYMENT REALATED API
 
